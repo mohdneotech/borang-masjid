@@ -21,7 +21,7 @@ function pb_hero_forms() {
 }
 
 function pb_add_hero_slides( $slides ) {
-	foreach ( pb_hero_forms() as $id ) { $slides[] = pb_hero_slide( $id ); }
+	foreach ( pb_hero_forms() as $id ) { $slides[ 'borang:' . $id ] = pb_hero_slide( $id ); } // keyed so Slaid Utama Masjid can place each one
 	return $slides;
 }
 add_filter( 'masjid_hero_slides', 'pb_add_hero_slides' );

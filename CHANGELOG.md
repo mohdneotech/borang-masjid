@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.2.1 — 2026-11-07
+- Front-page slides are now keyed (`borang:ID`) in `masjid_hero_slides` / `perepat_hero_slides`, so Slaid Utama Masjid 1.1+ can place each registration slide anywhere in its full slide sequence. Themes that read the filters as a plain list are unaffected.
+
 ## 1.2.0 — 2026-11-07 — security release
 Brings the public plugin up to the hardened site build. Recommended for everyone.
 - **Uploads**: real on-disk size check; type checked against the image header (not the browser's MIME); images re-encoded through the WordPress image editor (EXIF/GPS and anything appended removed, very large pixel counts refused, long side capped at 2400 px); whole-file scan for PHP / script markup; PDFs must be complete (`%%EOF`) and are refused if they contain JavaScript, Launch / GoToR / SubmitForm / ImportData actions, embedded files, rich media, XFA, or an object stream that cannot be decoded; decompression is capped (zip-bomb safe)
