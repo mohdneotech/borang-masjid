@@ -126,7 +126,11 @@ function pb_collect( $id ) {
 			continue;
 		}
 		if ( ! is_scalar( $raw ) ) { $raw = ''; }
-		$v = 'textarea' === $f['type'] ? mb_substr( sanitize_textarea_field( (string) $raw ), 0, 2000 ) : mb_substr( trim( sanitize_text_field( (string) $raw ) ), 0, 190 );
+		$raw = pb_clean_text( (string) $raw );
+		if ( ( 'textarea' === $f['type'] && mb_strlen( $raw ) > 2000 ) || ( 'textarea' !== $f['type'] && mb_strlen( $raw ) > 190 ) ) {
+			$errs[] = "$lbl terlalu panjang (maksimum " . ( 'textarea' === $f['type'] ? 2000 : 190 ) . ' aksara).';
+		}
+		$v = 'textarea' === $f['type'] ? mb_substr( sanitize_textarea_field( $raw ), 0, 2000 ) : mb_substr( trim( sanitize_text_field( $raw ) ), 0, 190 );
 
 		if ( '' === $v || ( 'consent' === $f['type'] && ! $v ) ) {
 			if ( $f['required'] ) { $errs[] = 'consent' === $f['type'] ? 'Sila tandakan akuan / persetujuan yang diwajibkan.' : "Sila isi: $lbl."; }
@@ -134,11 +138,20 @@ function pb_collect( $id ) {
 			continue;
 		}
 		switch ( $f['type'] ) {
+			case 'text':
+				if ( preg_match( '#(https?://|www\.|\b[a-z0-9-]+\.(com|net|org|xyz|top|ru|cn|info|biz|io)\b)#i', $v ) ) { $errs[] = "$lbl tidak boleh mengandungi pautan laman web."; }
+				break;
+			case 'textarea':
+				if ( preg_match( '#(https?://|www\.)#i', $v ) ) { $errs[] = "$lbl tidak boleh mengandungi pautan laman web."; }
+				break;
 			case 'ic':
+				if ( ! preg_match( '/^[0-9\s\-]+$/', $v ) ) { $errs[] = "$lbl hanya boleh mengandungi nombor."; break; }
 				$v = pb_digits( $v );
-				if ( 12 !== strlen( $v ) ) { $errs[] = "$lbl mestilah 12 digit."; }
+				if ( 12 !== strlen( $v ) ) { $errs[] = "$lbl mestilah 12 digit."; break; }
+				if ( ! pb_ic_date_ok( $v ) ) { $errs[] = "$lbl tidak sah — 6 digit pertama mestilah tarikh lahir (YYMMDD)."; }
 				break;
 			case 'tel':
+				if ( ! preg_match( '/^[0-9+\s\-().]+$/', $v ) ) { $errs[] = "$lbl hanya boleh mengandungi nombor."; break; }
 				$d = pb_digits( $v );
 				if ( strlen( $d ) < 9 || strlen( $d ) > 13 ) { $errs[] = "$lbl tidak sah."; }
 				break;
@@ -146,13 +159,15 @@ function pb_collect( $id ) {
 				if ( ! is_email( $v ) ) { $errs[] = "$lbl tidak sah."; }
 				break;
 			case 'number':
-				if ( ! is_numeric( $v ) ) { $errs[] = "$lbl mestilah nombor."; break; }
+				$v = str_replace( ',', '.', $v );
+				if ( ! preg_match( '/^-?\d{1,9}(\.\d{1,3})?$/', $v ) ) { $errs[] = "$lbl mestilah nombor."; break; }
 				if ( is_numeric( $f['min'] ) && (float) $v < (float) $f['min'] ) { $errs[] = "$lbl mestilah sekurang-kurangnya {$f['min']}."; }
 				if ( is_numeric( $f['max'] ) && (float) $v > (float) $f['max'] ) { $errs[] = "$lbl tidak boleh melebihi {$f['max']}."; }
 				break;
 			case 'date':
 				$t = strtotime( $v );
-				if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $v ) || ! $t ) { $errs[] = "$lbl tidak sah."; break; }
+				if ( ! preg_match( '/^(\d{4})-(\d{2})-(\d{2})$/', $v, $dm ) || ! $t || ! checkdate( (int) $dm[2], (int) $dm[3], (int) $dm[1] ) || (int) $dm[1] < 1900 || (int) $dm[1] > (int) gmdate( 'Y' ) + 10 ) { $errs[] = "$lbl tidak sah."; break; }
+				if ( ( '' !== $f['min'] || '' !== $f['max'] ) && $v > current_time( 'Y-m-d' ) ) { $errs[] = "$lbl tidak boleh pada masa hadapan."; break; }
 				$age = pb_age_on( $v, $ref );
 				if ( is_numeric( $f['min'] ) && ( null === $age || $age < (int) $f['min'] ) ) { $errs[] = "$lbl: umur mestilah sekurang-kurangnya {$f['min']} tahun pada " . pb_fmt_date( $ref, false ) . '.'; }
 				if ( is_numeric( $f['max'] ) && ( null === $age || $age > (int) $f['max'] ) ) { $errs[] = "$lbl: umur tidak boleh melebihi {$f['max']} tahun pada " . pb_fmt_date( $ref, false ) . '.'; }
@@ -186,9 +201,44 @@ function pb_collect_files( $id, $require = true, $values = null ) {
 	return [ $files, $errs ];
 }
 
-/** Insert a registration row. Returns [ id, ref ] or WP_Error. */
-function pb_insert_entry( $id, $values, $files, $status, $source = 'online' ) {
+/**
+ * Per-form lock (MySQL GET_LOCK) so simultaneous submissions cannot both pass the duplicate
+ * or quota check. Returns false where the database has no named locks (then runs unlocked).
+ */
+function pb_lock( $id ) {
 	global $wpdb;
+	$name = 'pb_' . substr( md5( DB_NAME . '|' . $wpdb->prefix ), 0, 12 ) . '_' . (int) $id;
+	$prev = $wpdb->suppress_errors( true );
+	$got  = $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 10)', $name ) );
+	$wpdb->suppress_errors( $prev );
+	return '1' === (string) $got ? $name : false;
+}
+function pb_unlock( $name ) {
+	global $wpdb;
+	if ( ! $name ) { return; }
+	$prev = $wpdb->suppress_errors( true );
+	$wpdb->query( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $name ) );
+	$wpdb->suppress_errors( $prev );
+}
+
+/**
+ * Insert a registration row. Returns [ id, ref, status ] or WP_Error.
+ * $guard (optional) runs under the form lock just before the insert and returns the final
+ * status or a WP_Error (used to re-check closing time and quota at the last moment).
+ */
+function pb_insert_entry( $id, $values, $files, $status, $source = 'online', $guard = null ) {
+	$lock = pb_lock( $id );
+	$res  = pb_insert_entry_locked( $id, $values, $files, $status, $source, $guard );
+	pb_unlock( $lock );
+	return $res;
+}
+function pb_insert_entry_locked( $id, $values, $files, $status, $source, $guard ) {
+	global $wpdb;
+	if ( is_callable( $guard ) ) {
+		$g = $guard();
+		if ( is_wp_error( $g ) ) { return $g; }
+		$status = (string) $g;
+	}
 	$s     = pb_settings( $id );
 	$kunci = '';
 	if ( $s['unik'] && isset( $values[ $s['unik'] ] ) && is_scalar( $values[ $s['unik'] ] ) ) {
@@ -223,5 +273,5 @@ function pb_insert_entry( $id, $values, $files, $status, $source = 'online' ) {
 	$pre = preg_replace( '/[^A-Z0-9]/', '', strtoupper( $s['prefix'] ) ) ?: 'REG';
 	$ref = $pre . '-' . str_pad( (string) $seq, 3, '0', STR_PAD_LEFT );
 	$wpdb->update( pb_t(), [ 'no_rujukan' => $ref ], [ 'id' => $eid ] );
-	return [ $eid, $ref ];
+	return [ $eid, $ref, $status ];
 }

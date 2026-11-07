@@ -31,6 +31,18 @@
 				fs.classList.toggle('pb-invalid', !any);
 				if (!any) { ok = false; }
 			});
+			// attachments: type and size checked before upload (server checks again)
+			form.querySelectorAll('input[type=file]').forEach(function (inp) {
+				var f = inp.files && inp.files[0], msg = '';
+				if (f && !inp.disabled) {
+					if (f.size > 10 * 1024 * 1024) { msg = 'Saiz fail melebihi 10 MB. Sila pilih fail yang lebih kecil.'; }
+					else if (!/\.(jpe?g|png|webp|pdf)$/i.test(f.name)) { msg = 'Jenis fail tidak dibenarkan. Sila pilih gambar (JPG/PNG) atau PDF.'; }
+				}
+				inp.setCustomValidity(msg);
+				var box = inp.parentNode.querySelector('.pb-file-err');
+				if (msg && !box) { box = document.createElement('div'); box.className = 'pb-file-err small text-danger mt-1'; box.setAttribute('role', 'alert'); inp.insertAdjacentElement('afterend', box); }
+				if (box) { box.textContent = msg; box.hidden = !msg; }
+			});
 			if (!form.checkValidity() || !ok) {
 				e.preventDefault();
 				form.classList.add('was-validated');
@@ -46,6 +58,9 @@
 			busy = true;
 			var b = form.querySelector('button[type=submit]');
 			if (b) { b.disabled = true; b.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Menghantar…'; }
+		});
+		form.querySelectorAll('input[type=file]').forEach(function (inp) {
+			inp.addEventListener('change', function () { inp.setCustomValidity(''); var b = inp.parentNode.querySelector('.pb-file-err'); if (b) { b.hidden = true; } });
 		});
 		form.querySelectorAll('fieldset[data-pb-req-group] input').forEach(function (i) {
 			i.addEventListener('change', function () { i.closest('fieldset').classList.remove('pb-invalid'); });

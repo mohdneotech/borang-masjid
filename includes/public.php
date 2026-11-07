@@ -26,6 +26,11 @@ function pb_enqueue_public( $with_js = true ) {
 /* ================================================================= POST handling (PRG) */
 
 add_action( 'template_redirect', function () {
+	// PHP drops $_POST / $_FILES entirely when the request exceeds post_max_size — tell the user instead of silently re-showing the form.
+	if ( 'POST' === ( $_SERVER['REQUEST_METHOD'] ?? '' ) && empty( $_POST ) && empty( $_FILES ) && (int) ( $_SERVER['CONTENT_LENGTH'] ?? 0 ) > wp_convert_hr_to_bytes( (string) ini_get( 'post_max_size' ) ) ) {
+		$GLOBALS['pb_toobig'] = true;
+		return;
+	}
 	if ( 'POST' !== ( $_SERVER['REQUEST_METHOD'] ?? '' ) || empty( $_POST['pb_borang'] ) ) { return; }
 	$id = absint( is_scalar( $_POST['pb_borang'] ) ? $_POST['pb_borang'] : 0 );
 	if ( ! $id || get_post_type( $id ) !== PB_CPT ) { return; }
@@ -36,20 +41,28 @@ add_action( 'template_redirect', function () {
 
 	[ $values, $errs ] = pb_collect( $id );
 	$GLOBALS['pb_values'][ $id ] = $values; // re-fill the form on any error below
-	if ( ( time() - (int) ( $_POST['pb_ts'] ?? 0 ) ) < 8 ) { $err[ $id ] = [ 'Borang dihantar terlalu cepat. Sila semak maklumat dan hantar semula.' ]; return; }
+	$age = pb_ts_age( $id, is_string( $_POST['pb_ts'] ?? null ) ? $_POST['pb_ts'] : '' );
+	if ( null === $age || $age > 2 * DAY_IN_SECONDS ) { $err[ $id ] = [ 'Sesi borang telah tamat. Sila muat semula halaman dan cuba lagi.' ]; return; }
+	if ( $age < 8 ) { $err[ $id ] = [ 'Borang dihantar terlalu cepat. Sila semak maklumat dan hantar semula.' ]; return; }
 
 	$state = pb_state( $id );
 	if ( ! in_array( $state, [ 'buka', 'menunggu' ], true ) ) { $err[ $id ] = [ 'Pendaftaran untuk borang ini ' . strtolower( pb_state_label( $state ) ) . '.' ]; return; }
 	if ( $errs ) { $err[ $id ] = $errs; return; }
-	if ( ! pb_throttle( 'submit', 10, HOUR_IN_SECONDS ) ) { $err[ $id ] = [ 'Terlalu banyak penghantaran dari rangkaian anda. Sila cuba sebentar lagi.' ]; return; }
+	if ( ! pb_throttle( 'submit', (int) apply_filters( 'pb_submit_limit', 20 ), HOUR_IN_SECONDS ) ) { $err[ $id ] = [ 'Terlalu banyak penghantaran dari rangkaian anda. Sila cuba sebentar lagi.' ]; return; }
 
 	[ $files, $ferrs ] = pb_collect_files( $id, true, $values );
 	if ( $ferrs ) { $err[ $id ] = $ferrs; return; }
 
-	$res = pb_insert_entry( $id, $values, $files, 'menunggu' === $state ? 'menunggu' : 'baru' );
+	// final check under the form lock: closing time / quota may have changed while files were processed
+	$guard = function () use ( $id ) {
+		$st = pb_state( $id );
+		if ( ! in_array( $st, [ 'buka', 'menunggu' ], true ) ) { return new WP_Error( 'tutup', 'Pendaftaran untuk borang ini ' . strtolower( pb_state_label( $st ) ) . '.' ); }
+		return 'menunggu' === $st ? 'menunggu' : 'baru';
+	};
+	$res = pb_insert_entry( $id, $values, $files, 'baru', 'online', $guard );
 	if ( is_wp_error( $res ) ) { foreach ( $files as $rel ) { pb_delete_private( $rel ); } $err[ $id ] = $res->get_error_messages(); return; }
 
-	$tok = pb_flash_set( [ 'id' => $id, 'ref' => $res[1], 'menunggu' => 'menunggu' === $state ] );
+	$tok = pb_flash_set( [ 'id' => $id, 'ref' => $res[1], 'menunggu' => 'menunggu' === $res[2] ] );
 	wp_safe_redirect( add_query_arg( 'pb_ok', $tok, strtok( (string) ( wp_get_referer() ?: get_permalink() ), '?#' ) ) . '#pb-' . $id );
 	exit;
 } );
@@ -125,6 +138,7 @@ function pb_shortcode( $atts ) {
 	if ( 'menunggu' === $state ) { $out .= '<div class="alert alert-warning rounded-4"><i class="fa-solid fa-hourglass-half me-2"></i>Kuota telah penuh. Pendaftaran baharu akan dimasukkan ke <strong>senarai menunggu</strong>.</div>'; }
 
 	$errs = $GLOBALS['pb_errors'][ $id ] ?? [];
+	if ( ! empty( $GLOBALS['pb_toobig'] ) ) { $errs[] = 'Fail yang dimuat naik terlalu besar dan borang tidak dapat diterima. Sila gunakan fail di bawah 10 MB (contoh: tangkap layar resit) dan isi semula borang.'; }
 	if ( $errs ) {
 		$out .= '<div class="alert alert-danger rounded-4" role="alert" tabindex="-1" id="pb-err-' . $id . '"><strong><i class="fa-solid fa-triangle-exclamation me-1"></i>Sila semak semula:</strong><ul class="mb-0 mt-2">';
 		foreach ( $errs as $e ) { $out .= '<li>' . esc_html( $e ) . '</li>'; }
@@ -135,7 +149,7 @@ function pb_shortcode( $atts ) {
 	$out .= '<form class="pb-form card border-0 shadow-sm rounded-4" method="post" action="' . esc_url( strtok( (string) get_permalink(), '?' ) . '#pb-' . $id ) . '"' . ( $has_file ? ' enctype="multipart/form-data"' : '' ) . ' novalidate data-pb-form>'
 		. '<div class="card-body p-4 p-lg-5">'
 		. wp_nonce_field( 'pb_hantar_' . $id, 'pb_nonce', false, false )
-		. '<input type="hidden" name="pb_borang" value="' . $id . '"><input type="hidden" name="pb_ts" value="' . time() . '">'
+		. '<input type="hidden" name="pb_borang" value="' . $id . '"><input type="hidden" name="pb_ts" value="' . esc_attr( pb_ts_token( $id ) ) . '">'
 		. '<div class="pb-hp" aria-hidden="true"><label>Laman web<input type="text" name="pb_web" tabindex="-1" autocomplete="off"></label></div>'
 		. '<p class="small text-secondary mb-4"><span class="text-danger">*</span> Wajib diisi</p>'
 		. pb_render_fields( $id, $GLOBALS['pb_values'][ $id ] ?? [] )

@@ -220,10 +220,33 @@ function pb_flash_get( $param = 'pb_ok' ) {
 	return $f['d'];
 }
 
-/** CSV cell guard against spreadsheet formula injection. */
+/** CSV cell guard against spreadsheet formula / DDE injection (also after leading spaces). */
 function pb_csv_cell( $v ) {
 	$v = (string) $v;
-	return ( '' !== $v && in_array( $v[0], [ '=', '+', '-', '@', "\t", "\r" ], true ) ) ? "'" . $v : $v;
+	$t = ltrim( $v, " \t\r\n\0\x0B" );
+	return ( '' !== $t && in_array( $t[0], [ '=', '+', '-', '@', '|', '%' ], true ) ) || ( '' !== $v && $t !== $v ) ? "'" . $v : $v;
+}
+
+/** Remove control characters and invisible / bidi-override characters (spoofing in admin lists & CSV). */
+function pb_clean_text( $s ) {
+	$s = (string) $s;
+	if ( ! mb_check_encoding( $s, 'UTF-8' ) ) { $s = mb_convert_encoding( $s, 'UTF-8', 'UTF-8' ); }
+	$s = preg_replace( '/[\x{0000}-\x{0008}\x{000B}\x{000C}\x{000E}-\x{001F}\x{007F}\x{00AD}\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2069}\x{FEFF}]/u', '', $s );
+	return null === $s ? '' : $s;
+}
+
+/** First 6 digits of a MyKad / MyKid must be a real date (YYMMDD). */
+function pb_ic_date_ok( $ic ) {
+	$y = (int) substr( $ic, 0, 2 ); $m = (int) substr( $ic, 2, 2 ); $d = (int) substr( $ic, 4, 2 );
+	return checkdate( $m, $d, 2000 + $y ) || checkdate( $m, $d, 1900 + $y );
+}
+
+/* Signed render timestamp: the "too fast" check cannot be skipped by posting an old/zero time. */
+function pb_ts_token( $id ) { $t = time(); return $t . '.' . substr( wp_hash( 'pb_ts|' . $id . '|' . $t, 'nonce' ), 0, 20 ); }
+function pb_ts_age( $id, $tok ) {
+	if ( ! is_string( $tok ) || ! preg_match( '/^(\d{9,11})\.([a-f0-9]{20})$/', $tok, $m ) ) { return null; }
+	if ( ! hash_equals( substr( wp_hash( 'pb_ts|' . $id . '|' . $m[1], 'nonce' ), 0, 20 ), $m[2] ) ) { return null; }
+	return time() - (int) $m[1];
 }
 
 /* ------------------------------------------------------------------ private uploads */
@@ -246,25 +269,122 @@ function pb_store_upload( $key ) {
 	$f = [];
 	foreach ( [ 'name', 'tmp_name', 'error', 'size' ] as $p ) { $f[ $p ] = $_FILES['pb_f'][ $p ][ $key ] ?? ''; }
 	if ( is_array( $f['name'] ) ) { return new WP_Error( 'upload', 'Fail tidak sah.' ); }
+	if ( in_array( (int) $f['error'], [ UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE ], true ) ) { return new WP_Error( 'upload', 'Saiz fail melebihi had yang dibenarkan (10 MB).' ); }
 	if ( UPLOAD_ERR_OK !== (int) $f['error'] ) { return new WP_Error( 'upload', 'Muat naik fail gagal. Sila cuba lagi.' ); }
-	if ( $f['size'] > 10 * MB_IN_BYTES ) { return new WP_Error( 'upload', 'Saiz fail melebihi 10 MB.' ); }
+	if ( ! is_string( $f['tmp_name'] ) || ! is_uploaded_file( $f['tmp_name'] ) ) { return new WP_Error( 'upload', 'Fail tidak sah.' ); }
+	$size = (int) @filesize( $f['tmp_name'] ); // real size on disk, not the client-supplied value
+	if ( $size < 100 ) { return new WP_Error( 'upload', 'Fail kosong atau rosak.' ); }
+	if ( $size > 10 * MB_IN_BYTES ) { return new WP_Error( 'upload', 'Saiz fail melebihi 10 MB.' ); }
 	$allowed = [ 'jpg|jpeg|jpe' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp', 'pdf' => 'application/pdf' ];
 	$chk     = wp_check_filetype_and_ext( $f['tmp_name'], $f['name'], $allowed );
 	if ( empty( $chk['ext'] ) || ! is_uploaded_file( $f['tmp_name'] ) ) { return new WP_Error( 'upload', 'Jenis fail tidak dibenarkan. Sila muat naik gambar (JPG/PNG) atau PDF.' ); }
-	$head = (string) @file_get_contents( $f['tmp_name'], false, null, 0, 1024 );
+	$body = (string) @file_get_contents( $f['tmp_name'] );
 	if ( 'pdf' === $chk['ext'] ) {
-		if ( 0 !== strpos( ltrim( $head ), '%PDF-' ) ) { return new WP_Error( 'upload', 'Fail PDF tidak sah.' ); }
-	} elseif ( false === @getimagesize( $f['tmp_name'] ) ) {
-		return new WP_Error( 'upload', 'Fail gambar tidak sah.' );
+		if ( 0 !== strpos( $body, '%PDF-' ) || false === strpos( substr( $body, -2048 ), '%%EOF' ) ) { return new WP_Error( 'upload', 'Fail PDF tidak sah atau rosak.' ); }
+		if ( pb_pdf_active_content( $body ) ) { return new WP_Error( 'upload', 'PDF ini mengandungi skrip atau lampiran tersembunyi dan tidak diterima. Sila muat naik tangkap layar (JPG/PNG) atau PDF biasa.' ); }
+	} else {
+		$img = @getimagesize( $f['tmp_name'] );
+		$mt  = [ 'jpg' => IMAGETYPE_JPEG, 'jpeg' => IMAGETYPE_JPEG, 'jpe' => IMAGETYPE_JPEG, 'png' => IMAGETYPE_PNG, 'webp' => IMAGETYPE_WEBP ];
+		if ( ! $img || ( $mt[ $chk['ext'] ] ?? -1 ) !== $img[2] ) { return new WP_Error( 'upload', 'Fail gambar tidak sah.' ); }
+		if ( $img[0] < 16 || $img[1] < 16 || $img[0] > 12000 || $img[1] > 12000 || $img[0] * $img[1] > 50000000 ) { return new WP_Error( 'upload', 'Gambar terlalu besar atau terlalu kecil (piksel). Sila gunakan tangkap layar atau gambar beresolusi biasa.' ); }
 	}
-	if ( preg_match( '/<\?php|<script|<html|<svg/i', $head ) ) { return new WP_Error( 'upload', 'Fail tidak dibenarkan.' ); }
+	// markup / code in the file header (images are also re-encoded below, which removes anything hidden later in the file)
+	if ( preg_match( '/<\?php|<\?=|<script|<html|<svg|<iframe/i', substr( $body, 0, 2048 ) ) || preg_match( '/<\?php|<script[\s>]|__halt_compiler/i', $body ) ) { return new WP_Error( 'upload', 'Fail tidak dibenarkan.' ); }
+	unset( $body );
 	$sub = gmdate( 'Y/m' );
 	$dir = pb_private_dir() . '/' . $sub;
 	wp_mkdir_p( $dir );
 	$name = gmdate( 'Ymd-His' ) . '-' . wp_generate_password( 10, false ) . '.' . $chk['ext'];
 	if ( ! @move_uploaded_file( $f['tmp_name'], "$dir/$name" ) ) { return new WP_Error( 'upload', 'Fail tidak dapat disimpan.' ); }
 	@chmod( "$dir/$name", 0640 );
+	if ( 'pdf' !== $chk['ext'] && ! pb_reencode_image( "$dir/$name" ) ) {
+		@unlink( "$dir/$name" );
+		return new WP_Error( 'upload', 'Fail gambar tidak dapat diproses. Sila cuba gambar lain.' );
+	}
 	return "$sub/$name";
+}
+
+/**
+ * Re-save an uploaded image through the image editor: drops EXIF / GPS metadata and anything
+ * appended to the file (polyglots), and scales very large photos down. Keeps the same path.
+ */
+function pb_reencode_image( $path ) {
+	if ( ! function_exists( 'wp_get_image_editor' ) ) { require_once ABSPATH . 'wp-admin/includes/image.php'; }
+	wp_raise_memory_limit( 'image' );
+	$ed = wp_get_image_editor( $path );
+	if ( is_wp_error( $ed ) ) { return (bool) apply_filters( 'pb_allow_unprocessed_image', false, $path ); }
+	if ( method_exists( $ed, 'maybe_exif_rotate' ) ) { $ed->maybe_exif_rotate(); }
+	$sz = $ed->get_size();
+	if ( max( $sz['width'], $sz['height'] ) > 2400 ) { $ed->resize( 2400, 2400, false ); }
+	$ed->set_quality( 85 );
+	$tmp = $path . '.tmp';
+	$res = $ed->save( $tmp, wp_check_filetype( $path )['type'] );
+	if ( is_wp_error( $res ) || empty( $res['path'] ) || ! is_file( $res['path'] ) ) { @unlink( $tmp ); return false; }
+	if ( ! @rename( $res['path'], $path ) ) { @unlink( $res['path'] ); return false; }
+	@chmod( $path, 0640 );
+	return true;
+}
+
+/**
+ * True if a PDF carries scripts, launch / submit actions, embedded files or rich media.
+ * Scans the object dictionaries with stream data cut out (so compressed page / image bytes cannot
+ * cause false matches) plus decompressed object streams (/ObjStm), with #xx name escapes decoded.
+ * Linear scan — no backtracking regex over the binary.
+ */
+function pb_pdf_active_content( $pdf ) {
+	$outer  = '';
+	$extra  = '';
+	$budget = 40 * MB_IN_BYTES;
+	$pos    = 0;
+	$len    = strlen( $pdf );
+	while ( false !== ( $s = strpos( $pdf, 'stream', $pos ) ) ) {
+		if ( $s >= 3 && 'end' === substr( $pdf, $s - 3, 3 ) ) { $outer .= substr( $pdf, $pos, $s + 6 - $pos ); $pos = $s + 6; continue; }
+		$d = $s + 6;
+		if ( $d < $len && "\r" === $pdf[ $d ] ) { $d++; }
+		if ( $d < $len && "\n" === $pdf[ $d ] ) { $d++; }
+		$e = strpos( $pdf, 'endstream', $d );
+		if ( false === $e ) { break; }
+		$outer .= substr( $pdf, $pos, $s - $pos );
+		$win  = substr( $pdf, max( $pos, $s - 4000 ), $s - max( $pos, $s - 4000 ) );
+		$o    = strrpos( $win, ' obj' );
+		$dict = false === $o ? $win : substr( $win, $o );
+		if ( false !== strpos( $dict, '/ObjStm' ) ) {
+			// Object streams hold dictionaries (where scripts / actions live). If we cannot read one
+			// (unknown filter, encryption, over budget) we cannot vouch for the file: treat as active.
+			if ( $budget <= 0 ) { return true; }
+			$data = substr( $pdf, $d, $e - $d );
+			$raw  = false;
+			if ( preg_match( '#/Filter\s*(?:\[\s*)?/FlateDecode(?![A-Za-z])\s*\]?\s*(?:/|>>)#', $dict ) || false === strpos( $dict, '/Filter' ) ) {
+				$cap = (int) min( $budget, 8 * MB_IN_BYTES ); // bounded: a small "zip bomb" cannot exhaust memory
+				$raw = false === strpos( $dict, '/Filter' ) ? $data : pb_inflate_capped( $data, $cap );
+			}
+			if ( ! is_string( $raw ) ) { return true; }
+			$budget -= strlen( $raw );
+			$extra  .= "\n" . $raw;
+		}
+		$pos = $e + 9;
+	}
+	$outer .= substr( $pdf, $pos );
+	$scan = preg_replace_callback( '/#([0-9a-fA-F]{2})/', function ( $m ) { return chr( hexdec( $m[1] ) ); }, $outer . $extra );
+	return (bool) preg_match( '#/(JavaScript|JS|Launch|EmbeddedFiles?|RichMedia|XFA|SubmitForm|ImportData|GoToE|GoToR|Rendition|Movie|Sound)(?![A-Za-z0-9])#', (string) $scan );
+}
+
+/** zlib / raw-deflate decode that stops at $cap bytes. @return string|false (false if invalid or larger than $cap) */
+function pb_inflate_capped( $data, $cap ) {
+	foreach ( [ ZLIB_ENCODING_DEFLATE, ZLIB_ENCODING_RAW ] as $enc ) {
+		$ctx = @inflate_init( $enc );
+		if ( ! $ctx ) { continue; }
+		$out = '';
+		$ok  = true;
+		foreach ( str_split( $data, 1024 ) as $chunk ) { // small input steps: deflate expands at most ~1032x, so each step adds ≤ ~1 MB
+			$part = @inflate_add( $ctx, $chunk, ZLIB_SYNC_FLUSH );
+			if ( false === $part ) { $ok = false; break; }
+			$out .= $part;
+			if ( strlen( $out ) > $cap ) { return false; }
+		}
+		if ( $ok && '' !== $out ) { return $out; }
+	}
+	return false;
 }
 function pb_private_path( $rel ) {
 	if ( ! is_string( $rel ) || ! preg_match( '#^\d{4}/\d{2}/[A-Za-z0-9\-]+\.(jpe?g|png|webp|pdf)$#', $rel ) ) { return null; }

@@ -43,9 +43,15 @@ Plugin WordPress untuk **membina borang pendaftaran program masjid / surau** sen
 | ![](docs/senarai-pendaftaran.png) | ![](docs/pendaftaran.png) | ![](docs/cetak.png) |
 
 **Keselamatan & privasi**
-- Fail muat naik disimpan di luar Media Library (`uploads/pb-private/`), disemak kandungannya (bukan sekadar nama fail) dan hanya boleh dibuka oleh AJK yang log masuk
-- Nonce, honeypot, masa minimum isi borang dan had penghantaran per IP; alamat IP disimpan sebagai hash sahaja
-- Perlindungan formula dalam CSV; mesej status melalui token pelayan
+- **Fail muat naik** (JPG / PNG / WebP / PDF, maks. 10 MB) disimpan di luar Media Library (`uploads/pb-private/`) dengan nama rawak, dan hanya boleh dibuka oleh AJK yang log masuk
+  - jenis fail disemak dari kandungan sebenar (bukan nama / jenis yang dihantar pelayar); saiz dari fail di pelayan
+  - **gambar disimpan semula** — EXIF / lokasi GPS dan apa-apa yang disorok di hujung fail dibuang; gambar terlalu besar (piksel) ditolak
+  - **PDF disemak**: ditolak jika ada JavaScript, tindakan *Launch / GoToR / SubmitForm*, fail terbenam, media atau *object stream* yang tidak dapat dibaca; nyahmampat dihadkan (tahan "zip bomb")
+  - kod PHP / HTML / SVG yang menyamar sebagai gambar atau PDF ditolak
+- **Semua medan disemak di pelayan**: pilihan mesti dari senarai, No. KP / MyKid 12 digit dengan tarikh lahir sah, telefon, nombor perpuluhan, tarikh & umur, had panjang; pautan web ditolak; aksara kawalan / *bidi-override* dibuang; medan yang tidak wujud dalam borang diabaikan
+- Nonce, honeypot, **cap masa bertandatangan** (masa minimum isi tidak boleh dipalsukan), had penghantaran per IP (lalai 20 sejam, penapis `pb_submit_limit`); alamat IP disimpan sebagai hash sahaja
+- Semakan akhir kuota, tarikh tutup dan pendaftaran berganda di bawah **kunci pangkalan data** — dua pendaftaran serentak tidak boleh melepasi kuota atau mendaftar MyKid yang sama
+- Perlindungan formula dalam CSV (termasuk selepas ruang kosong); mesej status melalui token pelayan
 - Hanya peranan dengan keupayaan `pb_urus` (Administrator, Editor, *AJK Kariah* jika ada) boleh melihat pendaftaran; padam kekal hanya untuk Administrator
 - Memadam borang turut memadam semua pendaftaran dan failnya
 
