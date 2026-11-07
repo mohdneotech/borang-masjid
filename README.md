@@ -23,6 +23,7 @@ Plugin WordPress untuk **membina borang pendaftaran program masjid / surau** sen
 **Untuk AJK (wp-admin → Borang Program)**
 - **Bina Borang Baharu** dari templat: *Khatan Perdana*, *Program / Kursus / Kelas*, *Sukarelawan / Gotong-royong* atau kosong
 - **Pembina medan** seret-dan-lepas — 14 jenis medan: tajuk bahagian, nota, teks pendek/panjang, No. KP/MyKid, telefon, e-mel, nombor, tarikh (dengan had umur), dropdown, radio, kotak semak, muat naik fail (JPG/PNG/PDF), akuan/persetujuan
+- **Medan bersyarat** — papar dan wajibkan medan hanya apabila jawapan tertentu dipilih (cth. *muat naik resit bayaran* hanya untuk kategori **Umum — RM100**, bukan Asnaf / Anak Yatim). Borang tidak boleh dihantar tanpa medan itu, dan pelayan turut menyemak
 - Tetapan per borang: tarikh dibuka & ditutup, kuota, tindakan apabila penuh, medan unik, awalan no. rujukan, teks butang, mesej selepas hantar
 - **Cipta halaman** dengan satu klik (atau shortcode `[borang id="N"]`), **Salin borang** untuk program tahun depan
 - **Senarai Pendaftaran**: carian, status *Baharu / Disahkan / Senarai Menunggu / Hadir / Batal*, catatan dalaman, sunting maklumat, pautan WhatsApp, tindakan pukal, **tambah manual** untuk pendaftaran di kaunter
@@ -32,6 +33,10 @@ Plugin WordPress untuk **membina borang pendaftaran program masjid / surau** sen
 | Templat | Pembina medan | Maklumat program & tetapan |
 |---|---|---|
 | ![](docs/templat.png) | ![](docs/pembina.png) | ![](docs/tetapan-program.png) |
+
+| Medan bersyarat — borang awam | Medan bersyarat — tetapan dalam pembina |
+|---|---|
+| ![](docs/bersyarat.png) | ![](docs/bersyarat-pembina.png) |
 
 | Senarai pendaftaran | Satu pendaftaran | Cetakan |
 |---|---|---|

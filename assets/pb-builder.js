@@ -21,6 +21,7 @@ jQuery(function ($) {
 		if (f.required) { badges += '<span class="pb-b pb-b-req">Wajib</span>'; }
 		if (f.width === 'half') { badges += '<span class="pb-b">½ lebar</span>'; }
 		if (f.list) { badges += '<span class="pb-b">Senarai</span>'; }
+		if (f.bila) { badges += '<span class="pb-b pb-b-cond" title="Dipaparkan bila: ' + esc(f.bila_nilai) + '">Bersyarat</span>'; }
 		if (hasOptions(f.type)) { badges += '<span class="pb-b">' + (f.options || []).length + ' pilihan</span>'; }
 		return '<span class="pb-grip" title="Seret untuk susun"><i class="fa-solid fa-grip-vertical"></i></span>' +
 			'<span class="pb-ti"><i class="fa-solid ' + esc(t.icon) + '"></i></span>' +
@@ -61,9 +62,26 @@ jQuery(function ($) {
 			h += '<p class="pb-checks"><label><input type="checkbox" data-k="required"' + (f.required ? ' checked' : '') + '> Wajib diisi</label>' +
 				(f.type !== 'file' && f.type !== 'consent' ? '<label><input type="checkbox" data-k="list"' + (f.list ? ' checked' : '') + '> Papar dalam senarai pendaftaran / cetakan</label>' : '') + '</p>';
 		}
+		h += condEditor(f);
 		h += '</div>';
 		return h;
 	}
+	function condEditor(f) {
+		var ctrl = fields.filter(function (o) { return o.id !== f.id && hasOptions(o.type); });
+		if (!ctrl.length && !f.bila) { return ''; }
+		var h = '<p><label>Papar hanya jika</label><select data-k="bila"><option value="">— Sentiasa dipaparkan —</option>';
+		ctrl.forEach(function (o) { h += '<option value="' + esc(o.id) + '"' + (o.id === f.bila ? ' selected' : '') + '>' + esc(plain(o.label) || o.id) + '</option>'; });
+		h += '</select></p>';
+		if (f.bila) {
+			var c = fields.filter(function (o) { return o.id === f.bila; })[0];
+			var opts = (c && c.options) || [];
+			h += '<p><label>…dijawab</label><select data-k="bila_nilai"><option value="">— Pilih jawapan —</option>';
+			opts.forEach(function (o) { h += '<option value="' + esc(o) + '"' + (o === f.bila_nilai ? ' selected' : '') + '>' + esc(o) + '</option>'; });
+			h += '</select></p><p class="pb-full description">Medan ini hanya dipaparkan — dan hanya diwajibkan — apabila jawapan tersebut dipilih.</p>';
+		}
+		return h;
+	}
+
 
 	function render(openIdx) {
 		$wrap.empty();
@@ -122,12 +140,13 @@ jQuery(function ($) {
 		if ($(this).is(':checkbox')) { f[k] = this.checked ? 1 : 0; }
 		else if (k === 'options') { f.options = $(this).val().split('\n').map(function (s) { return s.trim(); }).filter(Boolean); }
 		else { f[k] = $(this).val(); }
+		if (k === 'bila') { f.bila_nilai = ''; $it.children('.pb-fld-body').html(editor(f, i)); }
 		$it.children('.pb-fld-head').html(summary(f));
 		sync();
 	});
 	$('.pb-add').on('click', function () {
 		var t = $(this).data('type');
-		var f = { id: uid(), type: t, label: '', help: '', placeholder: '', required: 0, width: 'full', options: [], min: '', max: '', list: 0 };
+		var f = { id: uid(), type: t, label: '', help: '', placeholder: '', required: 0, width: 'full', options: [], min: '', max: '', list: 0, bila: '', bila_nilai: '' };
 		if (hasOptions(t)) { f.options = ['Pilihan 1', 'Pilihan 2']; }
 		if (t === 'heading') { f.label = 'Bahagian baharu'; }
 		if (t === 'consent') { f.label = 'Saya mengesahkan maklumat yang diberikan adalah benar.'; f.required = 1; }

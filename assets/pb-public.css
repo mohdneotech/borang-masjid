@@ -144,3 +144,9 @@
 .pb-slide-cta { display: block; background: #f4f8f0; border-top: 1px solid #e6eedf; padding: .75rem 1.2rem; font-size: .85rem; font-weight: 600; color: var(--pb-c); text-decoration: none; text-align: center; }
 .pb-slide-cta:hover { background: #eaf2e2; color: var(--pb-dark, #2f4d20); }
 @media (max-width: 991.98px) { .pb-slide-card { max-width: 260px; } .pb-cal-d { font-size: 5rem; } }
+
+/* conditional fields (1.1.0) */
+.pb-ui .pb-cond { display: contents; }
+.pb-ui .pb-cond[hidden] { display: none; }
+.pb-ui .row > .pb-cond > * { flex-shrink: 0; width: 100%; max-width: 100%; padding: 0 calc(.5 * var(--gx, 1rem)); margin-top: var(--gy, 0); }
+@media (min-width: 768px) { .pb-ui .row > .pb-cond > .col-md-6 { flex: 0 0 auto; width: 50%; } }

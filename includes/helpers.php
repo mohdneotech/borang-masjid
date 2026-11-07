@@ -105,10 +105,25 @@ function pb_sanitize_fields( $raw ) {
 			'min'         => mb_substr( sanitize_text_field( (string) ( $f['min'] ?? '' ) ), 0, 20 ),
 			'max'         => mb_substr( sanitize_text_field( (string) ( $f['max'] ?? '' ) ), 0, 20 ),
 			'list'        => ! empty( $f['list'] ) && pb_is_input( $type ) ? 1 : 0,
+			'bila'        => preg_replace( '/[^a-z0-9_]/', '', strtolower( (string) ( $f['bila'] ?? '' ) ) ),
+			'bila_nilai'  => mb_substr( sanitize_text_field( (string) ( $f['bila_nilai'] ?? '' ) ), 0, 150 ),
 		];
 		if ( count( $out ) >= 80 ) { break; }
 	}
 	return $out;
+}
+/**
+ * Conditional field: shown / required only when field `bila` has value `bila_nilai`.
+ * @param array $f   field
+ * @param array $in  raw or clean values (field id => value)
+ */
+function pb_cond_met( $f, $in ) {
+	$on = (string) ( $f['bila'] ?? '' );
+	if ( '' === $on ) { return true; }
+	$v = $in[ $on ] ?? '';
+	$want = (string) ( $f['bila_nilai'] ?? '' );
+	if ( is_array( $v ) ) { return in_array( $want, array_map( 'strval', $v ), true ); }
+	return is_scalar( $v ) && (string) $v === $want;
 }
 function pb_kses_text() {
 	return [ 'strong' => [], 'b' => [], 'em' => [], 'i' => [], 'br' => [], 'a' => [ 'href' => [], 'target' => [] ], 'ul' => [], 'ol' => [], 'li' => [], 'p' => [] ];

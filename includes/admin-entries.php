@@ -122,7 +122,7 @@ function pb_view_entry( $id, $eid, $edit ) {
 
 	if ( $edit ) {
 		$has_file = (bool) array_filter( pb_fields( $id ), fn( $f ) => 'file' === $f['type'] );
-		echo '<form method="post" class="pb-admin-form pb-ui" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"' . ( $has_file ? ' enctype="multipart/form-data"' : '' ) . '><input type="hidden" name="action" value="pb_kemaskini"><input type="hidden" name="e" value="' . (int) $eid . '">' . wp_nonce_field( 'pb_kemaskini_' . $eid, '_wpnonce', true, false )
+		echo '<form method="post" class="pb-admin-form pb-ui" novalidate action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"' . ( $has_file ? ' enctype="multipart/form-data"' : '' ) . '><input type="hidden" name="action" value="pb_kemaskini"><input type="hidden" name="e" value="' . (int) $eid . '">' . wp_nonce_field( 'pb_kemaskini_' . $eid, '_wpnonce', true, false )
 			. pb_render_fields( $id, $r['data'] )
 			. ( $has_file ? '<p class="description">Fail sedia ada dikekalkan kecuali anda memuat naik fail baharu.</p>' : '' )
 			. '<p><button class="button button-primary"><i class="fa-solid fa-floppy-disk"></i> Simpan perubahan</button> <a class="button" href="' . esc_url( pb_entries_url( [ 'borang' => $id, 'view' => 'lihat', 'e' => $eid ] ) ) . '">Batal</a></p></form>';
@@ -173,7 +173,7 @@ function pb_view_add( $id ) {
 	$has_file = (bool) array_filter( pb_fields( $id ), fn( $f ) => 'file' === $f['type'] );
 	echo '<p><a href="' . esc_url( pb_entries_url( [ 'borang' => $id ] ) ) . '">&larr; Senarai pendaftaran</a></p><h1><i class="fa-solid fa-user-plus"></i> Tambah pendaftaran manual — ' . esc_html( get_the_title( $id ) ) . '</h1>'
 		. '<p class="description">Untuk pendaftaran di kaunter / borang kertas. Kuota dan tarikh tutup tidak dikenakan; medan wajib tetap disemak.</p>'
-		. '<form method="post" class="pb-admin-form pb-ui" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"' . ( $has_file ? ' enctype="multipart/form-data"' : '' ) . '><input type="hidden" name="action" value="pb_manual"><input type="hidden" name="borang" value="' . $id . '">' . wp_nonce_field( 'pb_manual_' . $id, '_wpnonce', true, false )
+		. '<form method="post" class="pb-admin-form pb-ui" novalidate action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"' . ( $has_file ? ' enctype="multipart/form-data"' : '' ) . '><input type="hidden" name="action" value="pb_manual"><input type="hidden" name="borang" value="' . $id . '">' . wp_nonce_field( 'pb_manual_' . $id, '_wpnonce', true, false )
 		. pb_render_fields( $id, [] )
 		. '<p><label><strong>Status</strong> <select name="status">';
 	foreach ( pb_statuses() as $k => $v ) { echo '<option value="' . esc_attr( $k ) . '"' . selected( $k, 'sah', false ) . '>' . esc_html( $v[0] ) . '</option>'; }
@@ -197,7 +197,7 @@ add_action( 'admin_post_pb_manual', function () {
 	if ( get_post_type( $id ) !== PB_CPT ) { wp_die( 'Borang tidak ditemui.', 404 ); }
 	[ $values, $errs ] = pb_collect( $id );
 	if ( $errs ) { pb_admin_errors( $errs ); }
-	[ $files, $ferrs ] = pb_collect_files( $id, false );
+	[ $files, $ferrs ] = pb_collect_files( $id, false, $values );
 	if ( $ferrs ) { pb_admin_errors( $ferrs ); }
 	$st  = sanitize_key( $_POST['status'] ?? 'sah' );
 	$res = pb_insert_entry( $id, $values, $files, isset( pb_statuses()[ $st ] ) ? $st : 'sah', 'manual' );
@@ -215,7 +215,7 @@ add_action( 'admin_post_pb_kemaskini', function () {
 	$id = (int) $r['borang_id'];
 	[ $values, $errs ] = pb_collect( $id );
 	if ( $errs ) { pb_admin_errors( $errs ); }
-	[ $files, $ferrs ] = pb_collect_files( $id, false );
+	[ $files, $ferrs ] = pb_collect_files( $id, false, $values );
 	if ( $ferrs ) { pb_admin_errors( $ferrs ); }
 	$s     = pb_settings( $id );
 	$kunci = $s['unik'] && isset( $values[ $s['unik'] ] ) && is_scalar( $values[ $s['unik'] ] ) ? mb_substr( strtolower( preg_replace( '/[\s\-]+/', '', (string) $values[ $s['unik'] ] ) ), 0, 100 ) : '';

@@ -255,6 +255,7 @@ function pb_page_help() {
 	<h2>Tips</h2>
 	<ul>
 	<li>Untuk program tahun depan, gunakan <strong>Salin borang</strong> pada senarai borang — medan dan teks disalin, tarikh dikosongkan.</li>
+	<li><strong>Medan bersyarat</strong> — buka medan dan pilih <em>Papar hanya jika</em> serta jawapan. Contoh: medan "Resit bayaran" (Wajib) dipaparkan hanya apabila Kategori = "Umum — RM100". Medan itu hanya wajib apabila dipaparkan.</li>
 	<li>Medan <strong>Tarikh</strong> boleh menyemak umur: isi "Umur minimum / maksimum" — umur dikira pada <em>Tarikh program</em>.</li>
 	<li>Jangan padam medan selepas pendaftaran diterima — data lama untuk medan itu tidak akan dipaparkan lagi. Tukar tajuknya sahaja jika perlu.</li>
 	<li>Maklumat pendaftar (termasuk No. KP dan kesihatan) hanya boleh dilihat oleh AJK yang log masuk. Padam borang lama selepas program selesai jika data tidak lagi diperlukan.</li>

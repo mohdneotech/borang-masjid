@@ -37,6 +37,8 @@ function pb_render_fields( $id, $values = [] ) {
 		$help = $f['help'] ? '<div class="form-text" id="' . esc_attr( $dom ) . '-h">' . esc_html( $f['help'] ) . '</div>' : '';
 		$desc = $f['help'] ? ' aria-describedby="' . esc_attr( $dom ) . '-h"' : '';
 		$ph   = $f['placeholder'] ? ' placeholder="' . esc_attr( $f['placeholder'] ) . '"' : '';
+		$cond = ! empty( $f['bila'] );
+		if ( $cond ) { echo '<div class="pb-cond" data-pb-bila="' . esc_attr( 'pb[' . $f['bila'] . ']' ) . '" data-pb-nilai="' . esc_attr( $f['bila_nilai'] ) . '">'; }
 
 		switch ( $f['type'] ) {
 			case 'heading':
@@ -96,6 +98,7 @@ function pb_render_fields( $id, $values = [] ) {
 				echo '<div class="' . $col . '"><label class="form-label fw-semibold" for="' . esc_attr( $dom ) . '">' . esc_html( $f['label'] ) . $star . '</label>'
 					. '<input class="form-control" type="' . $type . '" id="' . esc_attr( $dom ) . '" name="' . esc_attr( $name ) . '" value="' . esc_attr( $shown ) . '"' . $req . $ph . $attr . $desc . '>' . $help . '</div>';
 		}
+		if ( $cond ) { echo '</div>'; }
 	}
 	echo '</div>';
 	return ob_get_clean();
@@ -114,6 +117,7 @@ function pb_collect( $id ) {
 		$fid = $f['id'];
 		$lbl = $f['label'];
 		if ( 'file' === $f['type'] ) { continue; } // handled after validation
+		if ( ! pb_cond_met( $f, $in ) ) { $out[ $fid ] = 'checkbox' === $f['type'] ? [] : ''; continue; } // hidden by condition
 		$raw = $in[ $fid ] ?? '';
 		if ( 'checkbox' === $f['type'] ) {
 			$v = array_values( array_intersect( $f['options'], array_map( 'strval', array_filter( (array) $raw, 'is_scalar' ) ) ) );
@@ -167,11 +171,12 @@ function pb_collect( $id ) {
 }
 
 /** Store uploads for file fields. @return array{0: array, 1: string[]} */
-function pb_collect_files( $id, $require = true ) {
+function pb_collect_files( $id, $require = true, $values = null ) {
 	$files = [];
 	$errs  = [];
 	foreach ( pb_input_fields( $id ) as $f ) {
 		if ( 'file' !== $f['type'] ) { continue; }
+		if ( null !== $values && ! pb_cond_met( $f, $values ) ) { continue; } // hidden by condition: ignore any upload
 		$r = pb_store_upload( $f['id'] );
 		if ( is_wp_error( $r ) ) { $errs[] = $f['label'] . ': ' . $r->get_error_message(); continue; }
 		if ( ! $r && $f['required'] && $require ) { $errs[] = 'Sila muat naik: ' . $f['label'] . '.'; continue; }

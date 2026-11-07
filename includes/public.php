@@ -43,7 +43,7 @@ add_action( 'template_redirect', function () {
 	if ( $errs ) { $err[ $id ] = $errs; return; }
 	if ( ! pb_throttle( 'submit', 10, HOUR_IN_SECONDS ) ) { $err[ $id ] = [ 'Terlalu banyak penghantaran dari rangkaian anda. Sila cuba sebentar lagi.' ]; return; }
 
-	[ $files, $ferrs ] = pb_collect_files( $id );
+	[ $files, $ferrs ] = pb_collect_files( $id, true, $values );
 	if ( $ferrs ) { $err[ $id ] = $ferrs; return; }
 
 	$res = pb_insert_entry( $id, $values, $files, 'menunggu' === $state ? 'menunggu' : 'baru' );

@@ -3,10 +3,30 @@
 	'use strict';
 	document.querySelectorAll('form[data-pb-form]').forEach(function (form) {
 		var busy = false;
+		// conditional fields: show + enable only when the controlling field has the given value
+		var conds = Array.prototype.slice.call(form.querySelectorAll('.pb-cond[data-pb-bila]'));
+		function condMet(c) {
+			var name = c.getAttribute('data-pb-bila'), want = c.getAttribute('data-pb-nilai');
+			var els = form.querySelectorAll('[name="' + name + '"], [name="' + name + '[]"]');
+			for (var i = 0; i < els.length; i++) {
+				var el = els[i];
+				if ((el.type === 'radio' || el.type === 'checkbox') ? (el.checked && el.value === want) : el.value === want) { return true; }
+			}
+			return false;
+		}
+		function applyConds() {
+			conds.forEach(function (c) {
+				var on = condMet(c);
+				c.hidden = !on;
+				c.querySelectorAll('input,select,textarea').forEach(function (el) { el.disabled = !on; });
+			});
+		}
+		if (conds.length) { form.addEventListener('change', applyConds); applyConds(); }
 		form.addEventListener('submit', function (e) {
 			// required checkbox groups: at least one ticked
 			var ok = true;
 			form.querySelectorAll('fieldset[data-pb-req-group]').forEach(function (fs) {
+				if (fs.closest('.pb-cond[hidden]')) { return; }
 				var any = fs.querySelector('input:checked');
 				fs.classList.toggle('pb-invalid', !any);
 				if (!any) { ok = false; }
