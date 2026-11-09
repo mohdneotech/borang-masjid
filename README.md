@@ -27,6 +27,7 @@ Plugin WordPress untuk **membina borang pendaftaran program masjid / surau** sen
 - Tetapan per borang: tarikh dibuka & ditutup, kuota, tindakan apabila penuh, medan unik, awalan no. rujukan, teks butang, mesej selepas hantar
 - **Cipta halaman** dengan satu klik (atau shortcode `[borang id="N"]`), **Salin borang** untuk program tahun depan
 - **Senarai Pendaftaran**: carian, status *Baharu / Disahkan / Senarai Menunggu / Hadir / Batal*, catatan dalaman, sunting maklumat, pautan WhatsApp, tindakan pukal, **tambah manual** untuk pendaftaran di kaunter
+- **Widget di Papan Pemuka WordPress** (1.2.2): borang dibuka, pendaftaran 7 hari lalu, amaran pendaftaran *Baharu* belum disemak, dan kad setiap borang semasa (status, tarikh program, hari sebelum tutup, tempat diisi berbanding kuota, pecahan status)
 - **Cetak senarai kehadiran** A4 (kolum tandatangan) dan **muat turun CSV** (dibuka terus dalam Excel)
 - Pilihan: papar borang yang dibuka sebagai **slaid di laman utama** (bersama plugin [Slaid Utama Masjid](https://github.com/mohdneotech/slaid-masjid))
 

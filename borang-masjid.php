@@ -3,7 +3,7 @@
  * Plugin Name:       Borang Program Masjid
  * Plugin URI:        https://github.com/mohdneotech/borang-masjid
  * Description:       Pembina borang pendaftaran program masjid / surau (cth. Khatan Perdana, kursus, sukarelawan). AJK bina borang sendiri dengan templat, tetapkan kuota, tarikh tutup dan semakan umur, terima pendaftaran dalam talian, urus status, cetak senarai kehadiran dan eksport CSV.
- * Version:           1.2.1
+ * Version:           1.2.2
  * Requires at least: 6.4
  * Requires PHP:      8.0
  * Author:            Mohd Nordin Hussain
@@ -26,7 +26,7 @@ if ( defined( 'PB_VER' ) ) {
 	return;
 }
 
-define( 'PB_VER', '1.2.1' );
+define( 'PB_VER', '1.2.2' );
 define( 'PB_DB_VER', '1' );
 define( 'PB_FILE', __FILE__ );
 define( 'PB_DIR', plugin_dir_path( __FILE__ ) );
@@ -46,6 +46,7 @@ require_once PB_DIR . 'includes/class-github-updater.php';
 if ( is_admin() ) {
 	require_once PB_DIR . 'includes/admin-builder.php';
 	require_once PB_DIR . 'includes/admin-entries.php';
+	require_once PB_DIR . 'includes/dash-widget.php';
 	require_once PB_DIR . 'includes/admin-settings.php';
 }
 if ( is_admin() || wp_doing_cron() ) {

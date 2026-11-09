@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.2.2 — 2026-11-09
+- **WordPress Dashboard widget "Borang Program — Pendaftaran"** (wp-admin home, for users with `pb_urus`): open forms, registrations in the last 7 days, total, an alert for unreviewed *Baharu* entries, and a card per current form (status, programme date, days until closing, places filled vs quota, status breakdown with links to the filtered list).
+
 ## 1.2.1 — 2026-11-07
 - Front-page slides are now keyed (`borang:ID`) in `masjid_hero_slides` / `perepat_hero_slides`, so Slaid Utama Masjid 1.1+ can place each registration slide anywhere in its full slide sequence. Themes that read the filters as a plain list are unaffected.
 
